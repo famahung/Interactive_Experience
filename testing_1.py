@@ -13,7 +13,7 @@ width, height = 640, 480
 
 # 球初始參數
 ball_x, ball_y = width // 2, height // 2
-ball_dx, ball_dy = 5, 5
+ball_dx, ball_dy = 9, 9
 ball_radius = 15
 
 # Paddle 參數
@@ -64,8 +64,8 @@ while cap.isOpened():
     # 球超出左右邊界時重置（遊戲重新開始）
     if ball_x < 0 or ball_x > width:
         ball_x, ball_y = width // 2, height // 2
-        ball_dx = 5 if random.choice([True, False]) else -5
-        ball_dy = random.choice([-5, -3, 3, 5])
+        ball_dx = 9 if random.choice([True, False]) else -9
+        ball_dy = random.choice([-9, -7, 7, 9])
 
     # 畫球
     cv2.circle(frame, (ball_x, ball_y), ball_radius, (0, 255, 255), -1)
