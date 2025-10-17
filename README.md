@@ -43,4 +43,20 @@ Notes:
 - Score glows yellow briefly when a player scores (matches paddle glow style)
 - Paddles and ball have neon glow effects
 
+# Multiball Experimental Version
+
+## hand_pong_pygame_2.py
+- Chaos multiball mode: every 15 seconds, spawns 3, then 4, then 5, ... balls at once
+- Each extra ball gets a random neon color and random direction
+- All multiballs have independent physics, scoring, and removal
+- Main ball retains wiggle/twinkle effect; extra balls use neon style
+- No cap on number of balls—game gets wilder over time!
+
+### How to Run
+To play the multiball version, run:
+
+    & ".\.venv_py311\Scripts\python.exe" ".\hand_pong_pygame_2.py"
+
+All other controls and features are the same as the original game.
+
 ---
