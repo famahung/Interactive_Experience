@@ -107,11 +107,11 @@ scale = SCREEN_H / 480.0
 
 # Game sizes (scaled)
 BALL_RADIUS = max(12, int(22 * scale))  # Bigger ball
-BALL_SPEED = max(7, int(16 * scale))    # Faster ball
-PADDLE_WIDTH = max(8, int(15 * scale))
-PADDLE_HEIGHT = max(40, int(100 * scale))
-MIN_PADDLE_H = max(30, int(60 * scale))
-MAX_PADDLE_H = max(60, int(120 * scale))
+BALL_SPEED = max(5, int(12 * 1.3 * scale))    # 30% faster ball
+PADDLE_WIDTH = max(8, int(25 * scale))
+PADDLE_HEIGHT = max(50, int(110 * scale))
+MIN_PADDLE_H = max(40, int(70 * scale))
+MAX_PADDLE_H = max(70, int(130 * scale))
 
 # Ball pause/wiggle and paddle height variables (global, before start_screen)
 wiggle_duration = 30
@@ -177,6 +177,7 @@ else:
 # Load sound effects
 score_sound = None
 scoreboard_sound = None
+hit_sound = None
 if mixer_ok:
     try:
         if os.path.exists('score sound.wav'):
@@ -193,6 +194,14 @@ if mixer_ok:
             print('DEBUG: Loaded scoreboard sound effect', flush=True)
     except Exception as e:
         print('DEBUG: Could not load scoreboard sound:', e, flush=True)
+
+    try:
+        if os.path.exists('hit.wav'):
+            hit_sound = pygame.mixer.Sound('hit.wav')
+            hit_sound.set_volume(0.5)
+            print('DEBUG: Loaded hit sound effect', flush=True)
+    except Exception as e:
+        print('DEBUG: Could not load hit sound:', e, flush=True)
 
 # Helper functions
 
@@ -369,28 +378,13 @@ def save_config():
     except Exception as e:
         print('DEBUG: Failed to save config:', e, flush=True)
 
-        # Update score
-        if ball_x < 0:
-            right_score += 1
-            print(
-                f'DEBUG: Right player scores! Score: {left_score} - {right_score}', flush=True)
-        else:
-            left_score += 1
-            print(
-                f'DEBUG: Left player scores! Score: {left_score} - {right_score}', flush=True)
 
-        # Gradually increase ball speed
-        ball_speed_multiplier = min(ball_speed_multiplier + 0.12, 3.0)
-
-        # Reset ball position and pause
-        ball_x, ball_y = SCREEN_W//2, SCREEN_H//2
-        ball_dx = BALL_SPEED if random.choice([True, False]) else -BALL_SPEED
-        ball_dy = random.choice([
-            -BALL_SPEED, -int(BALL_SPEED*0.8), int(BALL_SPEED*0.8), BALL_SPEED])
-        ball_pause_frames = pause_duration
-        ball_wiggle_frames = wiggle_duration
-        ball_wiggle_opacity = 255
-
+# Initialize game state variables (single ball)
+ball_x, ball_y = SCREEN_W//2, SCREEN_H//2
+ball_dx = BALL_SPEED if random.choice([True, False]) else -BALL_SPEED
+ball_dy = random.choice([
+    -BALL_SPEED, -int(BALL_SPEED*0.8), int(BALL_SPEED*0.8), BALL_SPEED])
+ball_speed_multiplier = 1.0
 
 # Paddle glow effect state
 left_paddle_glow = 0
@@ -545,37 +539,34 @@ while running:
         # Add rebound force based on paddle movement (left paddle)
         ball_dy += (left_paddle_y - ball_y) * 0.08
         left_paddle_glow = PADDLE_GLOW_FRAMES
+        if hit_sound:
+            hit_sound.play()
     # Right paddle collision
     if ball_x + BALL_RADIUS > SCREEN_W - PADDLE_WIDTH and abs(ball_y - right_paddle_y) < right_paddle_h//2:
         ball_dx *= -1
         # Add rebound force based on paddle movement (right paddle)
         ball_dy += (right_paddle_y - ball_y) * 0.08
         right_paddle_glow = PADDLE_GLOW_FRAMES
+        if hit_sound:
+            hit_sound.play()
 
-    # Out of bounds reset and score tracking
+    # Out of bounds reset and score tracking (single source of truth)
     if ball_x < 0 or ball_x > SCREEN_W:
         # Play score sound effect
         if score_sound:
             score_sound.play()
-
-        # Update score
+        # Update score correctly: ball exiting left means right scores, exiting right means left scores
         if ball_x < 0:
             right_score += 1
             right_score_glow = SCORE_GLOW_FRAMES
             right_scoreboard_sound_timer = time.time() + SCOREBOARD_SOUND_DELAY
-            print(
-                f'DEBUG: Right player scores! Score: {left_score} - {right_score}', flush=True)
         else:
             left_score += 1
             left_score_glow = SCORE_GLOW_FRAMES
             left_scoreboard_sound_timer = time.time() + SCOREBOARD_SOUND_DELAY
-            print(
-                f'DEBUG: Left player scores! Score: {left_score} - {right_score}', flush=True)
-
-        # Gradually increase ball speed
-        ball_speed_multiplier = min(ball_speed_multiplier + 0.12, 3.0)
-
-        # Reset ball position and pause
+        # Increase ball speed by 10% after each score
+        ball_speed_multiplier *= 1.10
+        # Reset original ball to center and pause briefly
         ball_x, ball_y = SCREEN_W//2, SCREEN_H//2
         ball_dx = BALL_SPEED if random.choice([True, False]) else -BALL_SPEED
         ball_dy = random.choice([
@@ -583,6 +574,8 @@ while running:
         ball_pause_frames = pause_duration
         ball_wiggle_frames = wiggle_duration
         ball_wiggle_opacity = 255
+
+    # Single-ball update continues below
 
     # Draw
     # Draw camera as background (maintain aspect ratio, fill screen)
@@ -611,11 +604,9 @@ while running:
         # Dark retro background
         screen.fill((10, 10, 30))
 
-    # Draw neon ball with glow effect
     # Draw neon ball with wiggle and opacity effect
     ball_draw_x = int(ball_x + wiggle_offset_x)
     ball_draw_y = int(ball_y + wiggle_offset_y)
-    # Draw glow layers with changing opacity if paused
     if ball_pause_frames > 0 and ball_wiggle_frames > 0:
         # Twinkle effect: change color rapidly
         twinkle_colors = [NEON_YELLOW, NEON_CYAN,
