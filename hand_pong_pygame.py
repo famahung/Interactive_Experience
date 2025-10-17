@@ -102,7 +102,6 @@ def bring_window_to_front():
 
 
 bring_window_to_front()
-
 # Scale factor based on 480 baseline
 scale = SCREEN_H / 480.0
 
@@ -114,13 +113,30 @@ PADDLE_HEIGHT = max(40, int(100 * scale))
 MIN_PADDLE_H = max(30, int(60 * scale))
 MAX_PADDLE_H = max(60, int(120 * scale))
 
-# Colors
+# Ball pause/wiggle and paddle height variables (global, before start_screen)
+wiggle_duration = 30
+pause_duration = 60
+ball_pause_frames = 0
+ball_wiggle_frames = 0
+ball_wiggle_opacity = 255
+# Paddle heights (fixed)
+left_paddle_h = PADDLE_HEIGHT
+right_paddle_h = PADDLE_HEIGHT
+
+# Colors - Retro Neon Style
 WHITE = (255, 255, 255)
 YELLOW = (0, 255, 255)
 GREEN = (0, 200, 0)
 RED = (200, 0, 0)
 BLUE = (50, 150, 255)
 BLACK = (0, 0, 0)
+
+# Neon colors matching the Hand Hockey logo
+NEON_PINK = (255, 20, 147)
+NEON_CYAN = (0, 255, 255)
+NEON_YELLOW = (255, 255, 0)
+NEON_BLUE = (100, 200, 255)
+NEON_PURPLE = (200, 100, 255)
 
 # Initialize camera
 cap = cv2.VideoCapture(0)
@@ -161,6 +177,43 @@ else:
 # Helper functions
 
 
+def draw_neon_paddle(surface, rect, primary_color, glow_color):
+    """Draw a paddle with neon glow effect"""
+    # Draw outer glow layers
+    for i in range(3, 0, -1):
+        glow_rect = rect.inflate(i * 4, i * 4)
+        glow_surf = pygame.Surface(
+            (glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+        alpha = 60 - (i * 15)
+        pygame.draw.rect(glow_surf, (*glow_color, alpha),
+                         glow_surf.get_rect(), border_radius=5)
+        surface.blit(glow_surf, glow_rect.topleft)
+
+    # Draw main paddle with gradient
+    pygame.draw.rect(surface, primary_color, rect, border_radius=5)
+    # Add bright edge/outline
+    pygame.draw.rect(surface, glow_color, rect, 3, border_radius=5)
+
+
+def draw_neon_ball(surface, x, y, radius, primary_color, glow_color):
+    """Draw a ball with neon glow effect"""
+    # Draw outer glow layers
+    for i in range(4, 0, -1):
+        glow_radius = radius + (i * 3)
+        glow_surf = pygame.Surface(
+            (glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+        alpha = 80 - (i * 15)
+        pygame.draw.circle(glow_surf, (*glow_color, alpha),
+                           (glow_radius, glow_radius), glow_radius)
+        surface.blit(glow_surf, (int(x - glow_radius), int(y - glow_radius)))
+
+    # Draw main ball
+    pygame.draw.circle(surface, primary_color, (int(x), int(y)), radius)
+    # Add bright center
+    pygame.draw.circle(surface, (255, 255, 255),
+                       (int(x), int(y)), max(3, radius // 3))
+
+
 def draw_text(surface, text, x, y, size, color=WHITE, center=False, bold=False):
     # Try gaming fonts first, fallback to Arial
     font_names = ['Consolas', 'Courier New', 'monospace', 'Arial']
@@ -184,38 +237,75 @@ def draw_text(surface, text, x, y, size, color=WHITE, center=False, bold=False):
 
 
 def start_screen():
-    # Display live camera in background with overlay and wait for SPACE
+    # Try to load start screen image
+    start_image = None
+    start_image_path = 'hand_hockey_start.jpg'
+    if os.path.exists(start_image_path):
+        try:
+            start_image = pygame.image.load(start_image_path)
+            # Scale to fit screen while maintaining aspect ratio
+            img_rect = start_image.get_rect()
+            scale_factor = min(SCREEN_W / img_rect.width,
+                               SCREEN_H / img_rect.height)
+            new_width = int(img_rect.width * scale_factor)
+            new_height = int(img_rect.height * scale_factor)
+            start_image = pygame.transform.scale(
+                start_image, (new_width, new_height))
+            print(f'DEBUG: Loaded start screen image: {start_image_path}')
+        except Exception as e:
+            print(f'DEBUG: Failed to load start screen image: {e}')
+            start_image = None
+
+    # Start BGM when start screen appears
+    if mixer_ok and pygame.mixer.get_init() and pygame.mixer.music.get_busy() == 0 and os.path.exists(BGM_FILE):
+        try:
+            pygame.mixer.music.play(-1)
+            print('DEBUG: Started BGM playback on start screen (loop)', flush=True)
+        except Exception as e:
+            print(f'DEBUG: Failed to start BGM: {e}', flush=True)
+
+    # Display start screen and wait for SPACE
     while True:
-        if CAMERA_AVAILABLE:
-            ret, frame = cap.read()
-            if not ret:
-                print('DEBUG: frame read failed in start_screen(); continuing loop')
-                # fallback to a blank frame for the overlay
-                frame = np.zeros((CAM_H, CAM_W, 3), dtype=np.uint8)
+        if start_image:
+            # Fill with dark background
+            screen.fill((10, 10, 30))
+            # Center the image
+            img_rect = start_image.get_rect(
+                center=(SCREEN_W//2, SCREEN_H//2 - 50))
+            screen.blit(start_image, img_rect)
         else:
-            # create a dummy (black) frame so UI still renders
-            ret = True
-            frame = np.zeros((CAM_H, CAM_W, 3), dtype=np.uint8)
-        if mirror_camera:
-            frame = cv2.flip(frame, 1)
-        # Convert to RGB and scale to screen size
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_rgb = cv2.resize(frame_rgb, (SCREEN_W, SCREEN_H))
-        pygame_frame = pygame.surfarray.make_surface(frame_rgb.swapaxes(0, 1))
-        screen.blit(pygame_frame, (0, 0))
+            # Fallback: Display live camera in background with overlay
+            if CAMERA_AVAILABLE:
+                ret, frame = cap.read()
+                if not ret:
+                    print('DEBUG: frame read failed in start_screen(); continuing loop')
+                    frame = np.zeros((CAM_H, CAM_W, 3), dtype=np.uint8)
+            else:
+                ret = True
+                frame = np.zeros((CAM_H, CAM_W, 3), dtype=np.uint8)
+            if mirror_camera:
+                frame = cv2.flip(frame, 1)
+            # Convert to RGB and scale to screen size
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_rgb = cv2.resize(frame_rgb, (SCREEN_W, SCREEN_H))
+            pygame_frame = pygame.surfarray.make_surface(
+                frame_rgb.swapaxes(0, 1))
+            screen.blit(pygame_frame, (0, 0))
 
-        # translucent overlay
-        overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
-        pygame.draw.rect(overlay, (0, 0, 0, 150),
-                         (20, SCREEN_H//4, SCREEN_W-40, int(SCREEN_H*0.15)))
-        screen.blit(overlay, (0, 0))
+            # translucent overlay
+            overlay = pygame.Surface((SCREEN_W, SCREEN_H), pygame.SRCALPHA)
+            pygame.draw.rect(overlay, (0, 0, 0, 150),
+                             (20, SCREEN_H//4, SCREEN_W-40, int(SCREEN_H*0.15)))
+            screen.blit(overlay, (0, 0))
 
-        draw_text(screen, 'Hand Paddle Pong Game', SCREEN_W//2,
-                  SCREEN_H//3, int(48*scale), WHITE, center=True)
+            draw_text(screen, 'Hand Paddle Pong Game', SCREEN_W//2,
+                      SCREEN_H//3, int(48*scale), WHITE, center=True)
+
+        # Instructions (shown for both image and camera background)
         draw_text(screen, 'Press SPACE to start — ESC to quit', SCREEN_W //
-                  2, SCREEN_H//2, int(28*scale), (200, 200, 200), center=True)
+                  2, SCREEN_H - 150, int(28*scale), (255, 255, 255), center=True)
         draw_text(screen, 'M to mute, +/- volume', SCREEN_W//2,
-                  SCREEN_H//2+50, int(20*scale), (160, 160, 160), center=True)
+                  SCREEN_H - 100, int(20*scale), (200, 200, 200), center=True)
 
         pygame.display.flip()
         for ev in pygame.event.get():
@@ -225,13 +315,6 @@ def start_screen():
                 if ev.key == pygame.K_ESCAPE:
                     return False
                 if ev.key == pygame.K_SPACE:
-                    # start bgm if loaded
-                    if mixer_ok and pygame.mixer.get_init() and pygame.mixer.music.get_busy() == 0 and os.path.exists(BGM_FILE):
-                        try:
-                            pygame.mixer.music.play(-1)
-                            print('DEBUG: Started BGM playback (loop)', flush=True)
-                        except Exception:
-                            pass
                     return True
         clock.tick(30)
 
@@ -266,22 +349,58 @@ def save_config():
     except Exception as e:
         print('DEBUG: Failed to save config:', e, flush=True)
 
+        # Update score
+        if ball_x < 0:
+            right_score += 1
+            print(
+                f'DEBUG: Right player scores! Score: {left_score} - {right_score}', flush=True)
+        else:
+            left_score += 1
+            print(
+                f'DEBUG: Left player scores! Score: {left_score} - {right_score}', flush=True)
 
-# Game state
-ball_x, ball_y = SCREEN_W//2, SCREEN_H//2
-ball_dx, ball_dy = BALL_SPEED, BALL_SPEED
-left_paddle_y = right_paddle_y = SCREEN_H//2
-left_paddle_h = right_paddle_h = PADDLE_HEIGHT
+        # Gradually increase ball speed
+        ball_speed_multiplier = min(ball_speed_multiplier + 0.12, 3.0)
+
+        # Reset ball position and pause
+        ball_x, ball_y = SCREEN_W//2, SCREEN_H//2
+        ball_dx = BALL_SPEED if random.choice([True, False]) else -BALL_SPEED
+        ball_dy = random.choice([
+            -BALL_SPEED, -int(BALL_SPEED*0.8), int(BALL_SPEED*0.8), BALL_SPEED])
+        ball_pause_frames = pause_duration
+        ball_wiggle_frames = wiggle_duration
+        ball_wiggle_opacity = 255
+
+
+# Paddle glow effect state
+left_paddle_glow = 0
+right_paddle_glow = 0
+PADDLE_GLOW_FRAMES = 18
 
 use_mouse_fallback = not MP_AVAILABLE
 
-
-# Start screen
 if not start_screen():
     cap.release()
     pygame.quit()
     sys.exit(0)
 print('DEBUG: start_screen returned True, entering main loop', flush=True)
+
+# Initialize game state variables
+ball_x, ball_y = SCREEN_W//2, SCREEN_H//2
+ball_dx = BALL_SPEED if random.choice([True, False]) else -BALL_SPEED
+ball_dy = random.choice(
+    [-BALL_SPEED, -int(BALL_SPEED*0.8), int(BALL_SPEED*0.8), BALL_SPEED])
+ball_speed_multiplier = 1.0
+left_paddle_y = SCREEN_H // 2
+right_paddle_y = SCREEN_H // 2
+left_score = 0
+right_score = 0
+wiggle_offset_x = 0
+wiggle_offset_y = 0
+# Score glow effect
+left_score_glow = 0
+right_score_glow = 0
+SCORE_GLOW_FRAMES = 45
 
 # Main loop
 running = True
@@ -349,16 +468,14 @@ while running:
 
                 if target == 'left':
                     left_paddle_y = max(
-                        dyn_h//2, min(SCREEN_H - dyn_h//2, edge_cy))
-                    left_paddle_h = dyn_h
+                        left_paddle_h//2, min(SCREEN_H - left_paddle_h//2, edge_cy))
                     print(
-                        f"DEBUG: LEFT paddle - hand at ({edge_cx},{edge_cy}) dyn_h={dyn_h} label={hand_label} mode={'handedness' if use_handedness_mapping else 'screen'} swap={swap_hands}", flush=True)
+                        f"DEBUG: LEFT paddle - hand at ({edge_cx},{edge_cy}) label={hand_label} mode={'handedness' if use_handedness_mapping else 'screen'} swap={swap_hands}", flush=True)
                 else:
                     right_paddle_y = max(
-                        dyn_h//2, min(SCREEN_H - dyn_h//2, edge_cy))
-                    right_paddle_h = dyn_h
+                        right_paddle_h//2, min(SCREEN_H - right_paddle_h//2, edge_cy))
                     print(
-                        f"DEBUG: RIGHT paddle - hand at ({edge_cx},{edge_cy}) dyn_h={dyn_h} label={hand_label} mode={'handedness' if use_handedness_mapping else 'screen'} swap={swap_hands}", flush=True)
+                        f"DEBUG: RIGHT paddle - hand at ({edge_cx},{edge_cy}) label={hand_label} mode={'handedness' if use_handedness_mapping else 'screen'} swap={swap_hands}", flush=True)
         else:
             # no hands detected this frame
             pass
@@ -367,9 +484,31 @@ while running:
         mx, my = pygame.mouse.get_pos()
         right_paddle_y = my
 
-    # Move ball
-    ball_x += ball_dx
-    ball_y += ball_dy
+    # Ball pause and wiggle effect after score
+    if ball_pause_frames > 0:
+        ball_pause_frames -= 1
+        # Wiggle effect: shake ball and change opacity
+        wiggle_phase = (pause_duration - ball_pause_frames)
+        if wiggle_phase < wiggle_duration:
+            ball_wiggle_frames = wiggle_duration - wiggle_phase
+            ball_wiggle_opacity = int(
+                120 + 80 * abs((wiggle_phase % 8) - 4) / 4)
+            # Ball wiggle offset
+            wiggle_offset_x = random.randint(-6, 6)
+            wiggle_offset_y = random.randint(-6, 6)
+        else:
+            ball_wiggle_frames = 0
+            ball_wiggle_opacity = 255
+            wiggle_offset_x = 0
+            wiggle_offset_y = 0
+    else:
+        # Move ball normally
+        ball_x += ball_dx * ball_speed_multiplier
+        ball_y += ball_dy * ball_speed_multiplier
+        ball_wiggle_frames = 0
+        ball_wiggle_opacity = 255
+        wiggle_offset_x = 0
+        wiggle_offset_y = 0
 
     # Collisions top/bottom
     if ball_y - BALL_RADIUS < 0 or ball_y + BALL_RADIUS > SCREEN_H:
@@ -380,18 +519,39 @@ while running:
         ball_dx *= -1
         # Add rebound force based on paddle movement (left paddle)
         ball_dy += (left_paddle_y - ball_y) * 0.08
+        left_paddle_glow = PADDLE_GLOW_FRAMES
     # Right paddle collision
     if ball_x + BALL_RADIUS > SCREEN_W - PADDLE_WIDTH and abs(ball_y - right_paddle_y) < right_paddle_h//2:
         ball_dx *= -1
         # Add rebound force based on paddle movement (right paddle)
         ball_dy += (right_paddle_y - ball_y) * 0.08
+        right_paddle_glow = PADDLE_GLOW_FRAMES
 
-    # Out of bounds reset
+    # Out of bounds reset and score tracking
     if ball_x < 0 or ball_x > SCREEN_W:
+        # Update score
+        if ball_x < 0:
+            right_score += 1
+            right_score_glow = SCORE_GLOW_FRAMES
+            print(
+                f'DEBUG: Right player scores! Score: {left_score} - {right_score}', flush=True)
+        else:
+            left_score += 1
+            left_score_glow = SCORE_GLOW_FRAMES
+            print(
+                f'DEBUG: Left player scores! Score: {left_score} - {right_score}', flush=True)
+
+        # Gradually increase ball speed
+        ball_speed_multiplier = min(ball_speed_multiplier + 0.12, 3.0)
+
+        # Reset ball position and pause
         ball_x, ball_y = SCREEN_W//2, SCREEN_H//2
         ball_dx = BALL_SPEED if random.choice([True, False]) else -BALL_SPEED
-        ball_dy = random.choice(
-            [-BALL_SPEED, -int(BALL_SPEED*0.8), int(BALL_SPEED*0.8), BALL_SPEED])
+        ball_dy = random.choice([
+            -BALL_SPEED, -int(BALL_SPEED*0.8), int(BALL_SPEED*0.8), BALL_SPEED])
+        ball_pause_frames = pause_duration
+        ball_wiggle_frames = wiggle_duration
+        ball_wiggle_opacity = 255
 
     # Draw
     # Draw camera as background (maintain aspect ratio, fill screen)
@@ -417,22 +577,75 @@ while running:
         bg_surf = pygame.surfarray.make_surface(cropped.swapaxes(0, 1))
         screen.blit(bg_surf, (0, 0))
     else:
-        screen.fill((30, 30, 30))
+        # Dark retro background
+        screen.fill((10, 10, 30))
 
-    # Ball
-    pygame.draw.circle(screen, (255, 255, 255), (int(
-        ball_x), int(ball_y)), BALL_RADIUS)  # White ball
+    # Draw neon ball with glow effect
+    # Draw neon ball with wiggle and opacity effect
+    ball_draw_x = int(ball_x + wiggle_offset_x)
+    ball_draw_y = int(ball_y + wiggle_offset_y)
+    # Draw glow layers with changing opacity if paused
+    if ball_pause_frames > 0 and ball_wiggle_frames > 0:
+        # Twinkle effect: change color rapidly
+        twinkle_colors = [NEON_YELLOW, NEON_CYAN,
+                          NEON_PINK, NEON_PURPLE, WHITE]
+        twinkle_idx = ((pause_duration - ball_pause_frames) //
+                       3) % len(twinkle_colors)
+        twinkle_color = twinkle_colors[twinkle_idx]
+        for i in range(4, 0, -1):
+            glow_radius = BALL_RADIUS + (i * 3)
+            glow_surf = pygame.Surface(
+                (glow_radius * 2, glow_radius * 2), pygame.SRCALPHA)
+            alpha = max(40, int(ball_wiggle_opacity * (0.7 - i * 0.1)))
+            pygame.draw.circle(glow_surf, (*twinkle_color, alpha),
+                               (glow_radius, glow_radius), glow_radius)
+            screen.blit(glow_surf, (ball_draw_x - glow_radius,
+                        ball_draw_y - glow_radius))
+        pygame.draw.circle(screen, twinkle_color,
+                           (ball_draw_x, ball_draw_y), BALL_RADIUS)
+        # Twinkle center highlight
+        pygame.draw.circle(screen, WHITE, (ball_draw_x,
+                           ball_draw_y), max(3, BALL_RADIUS // 3))
+    else:
+        draw_neon_ball(screen, ball_draw_x, ball_draw_y,
+                       BALL_RADIUS, NEON_YELLOW, NEON_CYAN)
 
-    # Paddles - make them very visible with wider size and bright outline
-    # Left paddle
+    # Draw neon paddles with glow effect
+    # Left paddle - Pink/Cyan gradient
     left_rect = pygame.Rect(
         0, int(left_paddle_y - left_paddle_h//2), PADDLE_WIDTH, int(left_paddle_h))
-    pygame.draw.rect(screen, GREEN, left_rect)
+    glow_strength_left = left_paddle_glow / \
+        PADDLE_GLOW_FRAMES if left_paddle_glow > 0 else 0
+    if left_paddle_glow > 0:
+        for i in range(4, 0, -1):
+            glow_rect = left_rect.inflate(i * 8, i * 8)
+            glow_surf = pygame.Surface(
+                (glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+            alpha = int(80 * glow_strength_left * (1 - i * 0.18))
+            pygame.draw.rect(glow_surf, (*NEON_YELLOW, alpha),
+                             glow_surf.get_rect(), border_radius=7)
+            screen.blit(glow_surf, glow_rect.topleft)
+    draw_neon_paddle(screen, left_rect, NEON_PINK, NEON_CYAN)
+    if left_paddle_glow > 0:
+        left_paddle_glow -= 1
 
-    # Right paddle
+    # Right paddle - Cyan/Pink gradient (opposite)
     right_rect = pygame.Rect(SCREEN_W - PADDLE_WIDTH, int(right_paddle_y -
                              right_paddle_h//2), PADDLE_WIDTH, int(right_paddle_h))
-    pygame.draw.rect(screen, RED, right_rect)
+    glow_strength_right = right_paddle_glow / \
+        PADDLE_GLOW_FRAMES if right_paddle_glow > 0 else 0
+    if right_paddle_glow > 0:
+        for i in range(4, 0, -1):
+            glow_rect = right_rect.inflate(i * 8, i * 8)
+            glow_surf = pygame.Surface(
+                (glow_rect.width, glow_rect.height), pygame.SRCALPHA)
+            alpha = int(80 * glow_strength_right * (1 - i * 0.18))
+            pygame.draw.rect(glow_surf, (*NEON_YELLOW, alpha),
+                             glow_surf.get_rect(), border_radius=7)
+            screen.blit(glow_surf, glow_rect.topleft)
+    draw_neon_paddle(screen, right_rect, NEON_CYAN, NEON_PINK)
+    if right_paddle_glow > 0:
+        right_paddle_glow -= 1
 
     # Draw hand landmarks (visual feedback for detected hands)
     if MP_AVAILABLE and hands and results and results.multi_hand_landmarks:
@@ -446,10 +659,95 @@ while running:
             x17 = int(lm17.x * SCREEN_W)
             y17 = int(lm17.y * SCREEN_H)
 
-            # Draw dots and line
-            pygame.draw.circle(screen, (255, 0, 255), (x5, y5), 12)
-            pygame.draw.circle(screen, (0, 255, 255), (x17, y17), 12)
-            pygame.draw.line(screen, (255, 255, 0), (x5, y5), (x17, y17), 5)
+            # Draw dots and line with neon glow
+            # Glow for landmark 5
+            for i in range(3, 0, -1):
+                alpha = 60 - (i * 15)
+                glow_surf = pygame.Surface((30, 30), pygame.SRCALPHA)
+                pygame.draw.circle(
+                    glow_surf, (*NEON_PINK, alpha), (15, 15), 12 + i * 2)
+                screen.blit(glow_surf, (x5 - 15, y5 - 15))
+            pygame.draw.circle(screen, NEON_PINK, (x5, y5), 12)
+            pygame.draw.circle(screen, WHITE, (x5, y5), 5)
+
+            # Glow for landmark 17
+            for i in range(3, 0, -1):
+                alpha = 60 - (i * 15)
+                glow_surf = pygame.Surface((30, 30), pygame.SRCALPHA)
+                pygame.draw.circle(
+                    glow_surf, (*NEON_CYAN, alpha), (15, 15), 12 + i * 2)
+                screen.blit(glow_surf, (x17 - 15, y17 - 15))
+            pygame.draw.circle(screen, NEON_CYAN, (x17, y17), 12)
+            pygame.draw.circle(screen, WHITE, (x17, y17), 5)
+
+            # Neon line connecting them
+            pygame.draw.line(screen, NEON_YELLOW, (x5, y5), (x17, y17), 7)
+            pygame.draw.line(screen, WHITE, (x5, y5), (x17, y17), 3)
+
+    # Draw scoreboard at the top center with neon style
+    score_font_size = int(72 * scale)
+
+    # Left score (pink glow) - Player 1
+    left_score_text = str(left_score)
+    # Calculate glow strength
+    left_glow_strength = left_score_glow / \
+        SCORE_GLOW_FRAMES if left_score_glow > 0 else 0
+
+    # Create glow layers with darker shades
+    glow_layers = [
+        (4, (100, 10, 60)),    # Outer glow
+        (3, (150, 15, 90)),    # Mid glow
+        (2, (200, 20, 120)),   # Inner glow
+    ]
+
+    # Extra glow when score changes (similar to paddle glow)
+    if left_score_glow > 0:
+        for i in range(4, 0, -1):
+            alpha = int(80 * left_glow_strength * (1 - i * 0.18))
+            draw_text(screen, left_score_text, SCREEN_W//2 - 100, 100,
+                      score_font_size + i * 4, (*NEON_YELLOW, alpha), center=True, bold=True)
+        left_score_glow -= 1
+
+    for offset, glow_color in glow_layers:
+        draw_text(screen, left_score_text, SCREEN_W//2 - 100, 100,
+                  score_font_size + offset * 2, glow_color, center=True, bold=True)
+    # Main score
+    draw_text(screen, left_score_text, SCREEN_W//2 - 100, 100,
+              score_font_size, NEON_PINK, center=True, bold=True)
+    # Bright highlight
+    draw_text(screen, left_score_text, SCREEN_W//2 - 100, 100,
+              score_font_size - 10, WHITE, center=True, bold=True)
+
+    # Right score (cyan glow) - Player 2
+    right_score_text = str(right_score)
+    # Calculate glow strength
+    right_glow_strength = right_score_glow / \
+        SCORE_GLOW_FRAMES if right_score_glow > 0 else 0
+
+    # Create glow layers with darker shades
+    glow_layers_cyan = [
+        (4, (0, 100, 100)),    # Outer glow
+        (3, (0, 150, 150)),    # Mid glow
+        (2, (0, 200, 200)),    # Inner glow
+    ]
+
+    # Extra glow when score changes (similar to paddle glow)
+    if right_score_glow > 0:
+        for i in range(4, 0, -1):
+            alpha = int(80 * right_glow_strength * (1 - i * 0.18))
+            draw_text(screen, right_score_text, SCREEN_W//2 + 100, 100,
+                      score_font_size + i * 4, (*NEON_YELLOW, alpha), center=True, bold=True)
+        right_score_glow -= 1
+
+    for offset, glow_color in glow_layers_cyan:
+        draw_text(screen, right_score_text, SCREEN_W//2 + 100, 100,
+                  score_font_size + offset * 2, glow_color, center=True, bold=True)
+    # Main score
+    draw_text(screen, right_score_text, SCREEN_W//2 + 100, 100,
+              score_font_size, NEON_CYAN, center=True, bold=True)
+    # Bright highlight
+    draw_text(screen, right_score_text, SCREEN_W//2 + 100, 100,
+              score_font_size - 10, WHITE, center=True, bold=True)
 
     pygame.display.flip()
 
