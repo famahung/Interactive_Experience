@@ -174,6 +174,26 @@ else:
     # no file; do nothing (avoid auto-generating here)
     pass
 
+# Load sound effects
+score_sound = None
+scoreboard_sound = None
+if mixer_ok:
+    try:
+        if os.path.exists('score sound.wav'):
+            score_sound = pygame.mixer.Sound('score sound.wav')
+            score_sound.set_volume(0.5)
+            print('DEBUG: Loaded score sound effect', flush=True)
+    except Exception as e:
+        print('DEBUG: Could not load score sound:', e, flush=True)
+
+    try:
+        if os.path.exists('score board.wav'):
+            scoreboard_sound = pygame.mixer.Sound('score board.wav')
+            scoreboard_sound.set_volume(0.4)
+            print('DEBUG: Loaded scoreboard sound effect', flush=True)
+    except Exception as e:
+        print('DEBUG: Could not load scoreboard sound:', e, flush=True)
+
 # Helper functions
 
 
@@ -401,6 +421,10 @@ wiggle_offset_y = 0
 left_score_glow = 0
 right_score_glow = 0
 SCORE_GLOW_FRAMES = 45
+# Scoreboard sound delay tracking
+left_scoreboard_sound_timer = 0
+right_scoreboard_sound_timer = 0
+SCOREBOARD_SOUND_DELAY = 0.5  # seconds
 
 # Main loop
 running = True
@@ -487,6 +511,7 @@ while running:
     # Ball pause and wiggle effect after score
     if ball_pause_frames > 0:
         ball_pause_frames -= 1
+
         # Wiggle effect: shake ball and change opacity
         wiggle_phase = (pause_duration - ball_pause_frames)
         if wiggle_phase < wiggle_duration:
@@ -529,15 +554,21 @@ while running:
 
     # Out of bounds reset and score tracking
     if ball_x < 0 or ball_x > SCREEN_W:
+        # Play score sound effect
+        if score_sound:
+            score_sound.play()
+
         # Update score
         if ball_x < 0:
             right_score += 1
             right_score_glow = SCORE_GLOW_FRAMES
+            right_scoreboard_sound_timer = time.time() + SCOREBOARD_SOUND_DELAY
             print(
                 f'DEBUG: Right player scores! Score: {left_score} - {right_score}', flush=True)
         else:
             left_score += 1
             left_score_glow = SCORE_GLOW_FRAMES
+            left_scoreboard_sound_timer = time.time() + SCOREBOARD_SOUND_DELAY
             print(
                 f'DEBUG: Left player scores! Score: {left_score} - {right_score}', flush=True)
 
@@ -702,6 +733,12 @@ while running:
 
     # Extra glow when score changes (similar to paddle glow)
     if left_score_glow > 0:
+        # Check if it's time to play scoreboard sound (0.5 seconds after score)
+        if left_scoreboard_sound_timer > 0 and time.time() >= left_scoreboard_sound_timer:
+            if scoreboard_sound:
+                scoreboard_sound.play()
+            left_scoreboard_sound_timer = 0  # Reset timer after playing
+
         for i in range(4, 0, -1):
             alpha = int(80 * left_glow_strength * (1 - i * 0.18))
             draw_text(screen, left_score_text, SCREEN_W//2 - 100, 100,
@@ -733,6 +770,12 @@ while running:
 
     # Extra glow when score changes (similar to paddle glow)
     if right_score_glow > 0:
+        # Check if it's time to play scoreboard sound (0.5 seconds after score)
+        if right_scoreboard_sound_timer > 0 and time.time() >= right_scoreboard_sound_timer:
+            if scoreboard_sound:
+                scoreboard_sound.play()
+            right_scoreboard_sound_timer = 0  # Reset timer after playing
+
         for i in range(4, 0, -1):
             alpha = int(80 * right_glow_strength * (1 - i * 0.18))
             draw_text(screen, right_score_text, SCREEN_W//2 + 100, 100,
