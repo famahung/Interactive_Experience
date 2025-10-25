@@ -43,20 +43,51 @@ Notes:
 - Score glows yellow briefly when a player scores (matches paddle glow style)
 - Paddles and ball have neon glow effects
 
-# Multiball Experimental Version
+# Game Versions
 
-## hand_pong_pygame_2.py
-- Chaos multiball mode: every 15 seconds, spawns 3, then 4, then 5, ... balls at once
+## hand_pong_pygame.py (Original Version)
+The classic hand-controlled Pong game:
+- Traditional gameplay: paddles locked to left and right sides of the screen
+- Paddles move only vertically (up/down)
+- Single ball gameplay
+- Hand tracking controls paddle vertical position
+- Classic Pong-style collision detection
+
+### How to Run
+    & ".\.venv_py311\Scripts\python.exe" ".\hand_pong_pygame.py"
+
+---
+
+## hand_pong_pygame_2.py (Multiball Chaos Version)
+Experimental multiball mode with traditional paddle mechanics:
+- **Multiball chaos**: Every 15 seconds, spawns 3, then 4, then 5, ... balls at once
 - Each extra ball gets a random neon color and random direction
 - All multiballs have independent physics, scoring, and removal
 - Main ball retains wiggle/twinkle effect; extra balls use neon style
 - No cap on number of balls—game gets wilder over time!
+- Paddles still locked to left/right sides (classic Pong style)
 
 ### How to Run
-To play the multiball version, run:
-
     & ".\.venv_py311\Scripts\python.exe" ".\hand_pong_pygame_2.py"
 
-All other controls and features are the same as the original game.
+---
+
+## hand_pong_pygame_3.py (Free-Moving Paddle Version)
+Revolutionary gameplay with full 2D paddle control:
+- **Free-moving paddles**: Paddles can move anywhere on the screen (X and Y axes)
+- Hand tracking maps to full screen coordinates - move your hand anywhere!
+- Circular collision detection: Ball bounces away from paddle center based on angle of impact
+- More dynamic, air-hockey-style gameplay
+- Multiball mode included (same chaos as version 2)
+- Strategic positioning becomes crucial - block and defend from any angle!
+
+### How to Run
+    & ".\.venv_py311\Scripts\python.exe" ".\hand_pong_pygame_3.py"
+
+### Key Differences from Version 2:
+- **Paddle Movement**: Full 2D freedom vs locked to sides
+- **Collision Physics**: Circular/angular bounce vs edge-based reflection
+- **Gameplay Style**: Air hockey meets Pong vs traditional Pong
+- **Strategy**: Positional play and interception vs timing and reflexes
 
 ---

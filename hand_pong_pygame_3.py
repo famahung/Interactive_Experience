@@ -520,14 +520,18 @@ while running:
 
                 if target == 'left':
                     # Paddle can move freely - map hand to full screen coordinates
-                    left_paddle_x = max(PADDLE_WIDTH//2, min(SCREEN_W - PADDLE_WIDTH//2, edge_cx))
-                    left_paddle_y = max(left_paddle_h//2, min(SCREEN_H - left_paddle_h//2, edge_cy))
+                    left_paddle_x = max(
+                        PADDLE_WIDTH//2, min(SCREEN_W - PADDLE_WIDTH//2, edge_cx))
+                    left_paddle_y = max(
+                        left_paddle_h//2, min(SCREEN_H - left_paddle_h//2, edge_cy))
                     print(
                         f"DEBUG: LEFT paddle - hand at ({edge_cx},{edge_cy}) label={hand_label} mode={'handedness' if use_handedness_mapping else 'screen'} swap={swap_hands}", flush=True)
                 else:
                     # Paddle can move freely - map hand to full screen coordinates
-                    right_paddle_x = max(PADDLE_WIDTH//2, min(SCREEN_W - PADDLE_WIDTH//2, edge_cx))
-                    right_paddle_y = max(right_paddle_h//2, min(SCREEN_H - right_paddle_h//2, edge_cy))
+                    right_paddle_x = max(
+                        PADDLE_WIDTH//2, min(SCREEN_W - PADDLE_WIDTH//2, edge_cx))
+                    right_paddle_y = max(
+                        right_paddle_h//2, min(SCREEN_H - right_paddle_h//2, edge_cy))
                     print(
                         f"DEBUG: RIGHT paddle - hand at ({edge_cx},{edge_cy}) label={hand_label} mode={'handedness' if use_handedness_mapping else 'screen'} swap={swap_hands}", flush=True)
         else:
@@ -598,7 +602,7 @@ while running:
         left_paddle_glow = PADDLE_GLOW_FRAMES
         if hit_sound:
             hit_sound.play()
-    
+
     # Right paddle collision (now checks distance from paddle center for free-moving paddle)
     dx_right = ball_x - right_paddle_x
     dy_right = ball_y - right_paddle_y
@@ -760,7 +764,8 @@ while running:
     # Draw neon paddles with glow effect (now free-moving)
     # Left paddle - Pink/Cyan gradient
     left_rect = pygame.Rect(
-        int(left_paddle_x - PADDLE_WIDTH//2), int(left_paddle_y - left_paddle_h//2), 
+        int(left_paddle_x - PADDLE_WIDTH //
+            2), int(left_paddle_y - left_paddle_h//2),
         PADDLE_WIDTH, int(left_paddle_h))
     glow_strength_left = left_paddle_glow / \
         PADDLE_GLOW_FRAMES if left_paddle_glow > 0 else 0
@@ -779,7 +784,8 @@ while running:
 
     # Right paddle - Cyan/Pink gradient (opposite)
     right_rect = pygame.Rect(
-        int(right_paddle_x - PADDLE_WIDTH//2), int(right_paddle_y - right_paddle_h//2), 
+        int(right_paddle_x - PADDLE_WIDTH //
+            2), int(right_paddle_y - right_paddle_h//2),
         PADDLE_WIDTH, int(right_paddle_h))
     glow_strength_right = right_paddle_glow / \
         PADDLE_GLOW_FRAMES if right_paddle_glow > 0 else 0
